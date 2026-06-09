@@ -1,0 +1,27 @@
+flowchart TD
+  START["update_blocked()<br/>for each Pending segment only"] --> A{"attempted ∧ blocked?"}
+
+  A -->|yes| FREEZE["Freeze — no geometry change<br/>recovery already failed here"]
+
+  A -->|no| B{"source == OarpRank?"}
+  B -->|yes| OARP["Refresh blocked flag only<br/>is_blocked(centerline)<br/>no polyline split"]
+
+  B -->|no| C["free_subpolylines()<br/>PathInvalidator on planning grid<br/>footprint 0.22 m cost ≥ 50"]
+  C --> D{"free_parts empty?"}
+  D -->|yes| BLK["blocked = true"]
+
+  D -->|no| E{"one part ∧ free_len ≈ full length?"}
+  E -->|yes| TRIM["Trim centerline to free part<br/>re-check blocked"]
+
+  E -->|no| F["Partial blockage — multi fragment"]
+  F --> G{"fragment length ≥ min_split 0.25 m?"}
+  G -->|no| SKIP[drop tiny fragment]
+  G -->|yes| CHILD["Spawn Split child<br/>baseline_id + lane_index kept<br/>attempted = parent.attempted ∧ parent.blocked"]
+  SKIP --> H
+  CHILD --> H{"any children created?"}
+  H -->|no| BLK2["parent blocked = true"]
+  H -->|yes| REV["replace parent with children<br/>catalog revision++"]
+
+  subgraph sched [Schedulability note — default yaml]
+    NOTE["Schedulable = Pending ∧ ¬blocked<br/>schedule_blocked_probes: false<br/>PartiallyCompleted: open but not re-queued"]
+  end

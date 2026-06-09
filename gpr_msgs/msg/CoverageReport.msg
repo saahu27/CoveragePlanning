@@ -1,0 +1,27 @@
+# Live coverage measurement and baseline comparison.
+std_msgs/Header header
+uint64 mission_id
+
+float64 coverage_pct
+float64 blocked_pct
+float64 skipped_pct
+float64 remaining_pct
+float64 plan_retention_pct
+
+float64 baseline_swath_length_m
+float64 completed_swath_length_m
+float64 blocked_swath_length_m
+float64 skipped_swath_length_m
+float64 pending_swath_length_m
+
+float64 baseline_swath_area_m2
+float64 completed_swath_area_m2
+
+uint32 segments_total
+uint32 segments_completed
+uint32 segments_blocked
+uint32 segments_skipped
+uint32 segments_pending
+
+UncoveredRegion[] uncovered_regions
+CoverageSegment[] segments

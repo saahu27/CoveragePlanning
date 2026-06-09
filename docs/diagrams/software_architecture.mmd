@@ -1,0 +1,144 @@
+flowchart TB
+  subgraph EXT["External systems"]
+    GZ["Gazebo sim<br/>gpr_bringup gz_sim + gpr_scan.sdf.xacro"]
+    LIDAR["/scan sensor_msgs/LaserScan"]
+    NAV2["Nav2 minimal stack<br/>controller_server<br/>velocity_smoother<br/>collision_monitor"]
+    FP["follow_path action<br/>nav2_msgs/FollowPath"]
+    ORT["OR-Tools ATSP<br/>/opt/ortools optional"]
+    RVIZ["RViz2 gpr_scan.rviz"]
+  end
+
+  subgraph BRINGUP["gpr_bringup"]
+    LAUNCH["gpr_coverage.launch.py"]
+    PARAMS["gpr_coverage.yaml<br/>nav2_gpr_params.yaml"]
+  end
+
+  subgraph NODE["gpr_mission_node process"]
+    GMN["GprMissionNode<br/>tick_tree 2 Hz<br/>/coverage_status"]
+    BB["BT::Blackboard<br/>mission_provider"]
+    CS["CoverageStack::initialize"]
+    MC["MissionContext"]
+
+    subgraph BT["BehaviorTree CPP coverage_mission.xml"]
+      WFM["WaitForMap"]
+      GIC["GenerateInitialCoverage"]
+      HPJ["HasPendingJobs"]
+      USC["UpdateSegmentCatalog"]
+      SNR["ScheduleNeedsRebuild"]
+      RCS["RecomputeSchedule"]
+      ENJ["ExecuteNextJob"]
+      CC["CancelControl"]
+      SCJ["SkipCurrentJob"]
+      MCO["MissionComplete"]
+      RTS["ReturnToStart"]
+    end
+
+    subgraph BRIDGES["In-process ROS bridge layers"]
+      PB["PerceptionBridge<br/>gpr_perception_ros"]
+      PS["PlanningServices<br/>engine + io"]
+      PW["PlanningWorker<br/>background thread"]
+      PO["planning_ops<br/>generate_initial_coverage<br/>recompute_and_publish"]
+      RIO["RosIoFacade<br/>gpr_planning_ros"]
+      CB["ControlBridge<br/>gpr_control"]
+      NFT["Nav2FollowPathTracker"]
+      PJU["planning_job_utils<br/>submit_schedule_job<br/>poll_planning_job"]
+    end
+  end
+
+  subgraph PERC_CORE["gpr_perception_core pure C++"]
+    PP["PerceptionPipeline<br/>GridMapConstPtr grid_seq"]
+    OGM["OccupancyGridMapper<br/>log-odds rays + inflation"]
+  end
+
+  subgraph PLAN_CORE["gpr_planning_core pure C++"]
+    BP["BoustrophedonPlanner<br/>generate + generate_segments"]
+    PI["PathInvalidator<br/>is_blocked free_subpolylines"]
+    SCAT["SegmentCatalog<br/>update_blocked splits OARP"]
+    BSQ["BoustrophedonSequencer<br/>lane-coherent passes"]
+    ASTAR["AStarGridPlanner<br/>plan_path transit_cost"]
+    OARP["OarpLitePlanner<br/>rank replan"]
+    SOLV["ISequenceSolver"]
+    ORS["OrToolsAtspSolver"]
+    HS["HeuristicAtspSolver"]
+    CSS["create_sequence_solver"]
+  end
+
+  subgraph PLAN_ROS["gpr_planning_ros domain + I/O"]
+    PE["PlanningEngine<br/>no ROS publishers<br/>catalog schedule jobs"]
+  end
+
+  subgraph METRICS["gpr_metrics pure C++"]
+    CR["CoverageReporter<br/>baseline metrics uncovered"]
+  end
+
+  subgraph COMMON["gpr_common shared types no rclcpp"]
+    TYPES["Pose2D Polyline ScanArea MissionState"]
+    COV["CoverageSegment CoverageJob SegmentId"]
+    GRID["GridMap GridMapConstPtr GridMapUtils"]
+  end
+
+  subgraph MSGS["gpr_msgs ROS interfaces"]
+    MSG["CoverageReport Schedule<br/>CoverageSegment CoverageJob"]
+  end
+
+  LAUNCH --> GMN
+  PARAMS --> CS
+  GZ --> LIDAR
+  LIDAR --> PB
+
+  GMN --> BB --> BT
+  GMN --> CS --> MC
+  BT --> MC
+  BT --> PJU
+
+  MC --> PB
+  MC --> PS
+  MC --> PW
+  MC --> CB
+  PS --> PE
+  PS --> RIO
+  PW --> PO
+  PO --> PE
+  PO --> RIO
+  CB --> NFT
+  PJU --> PW
+
+  PB --> PP --> OGM
+  PE --> BP
+  PE --> SCAT
+  PE --> PI
+  PE --> BSQ
+  PE --> ASTAR
+  PE --> OARP
+  PE --> SOLV
+  PE --> CR
+  CSS --> ORS
+  CSS --> HS
+  SOLV --> ORS
+  SOLV --> HS
+  ORT -.-> ORS
+
+  OGM --> GRID
+  PP --> GRID
+  PE --> GRID
+  PE --> COV
+  SCAT --> PI
+  SCAT --> COV
+  BP --> COV
+  BP --> TYPES
+  NFT --> TYPES
+  MC --> TYPES
+
+  PB -->|"pub /local_occupancy_grid inflated"| RVIZ
+  PB -->|"pub /local_occupancy_grid_planning"| PE
+  RIO -->|"pub /initial_coverage_path"| RVIZ
+  RIO -->|"pub /updated_coverage_path markers strips"| RVIZ
+  RIO -->|"pub /coverage_transit_path"| RVIZ
+  RIO -->|"pub /coverage_report uncovered_markers"| RVIZ
+  RIO -->|"pub /coverage_schedule"| MSG
+  NFT -->|"action client follow_path"| FP
+  FP --> NAV2
+  NAV2 -->|"cmd_vel_nav"| GZ
+
+  PE -.->|"latest_grid_ptr GridMapConstPtr"| GRID
+  PB -.->|"latest_grid_ptr"| GRID

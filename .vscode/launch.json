@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug gpr_mission_node",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/overlay_ws/install/gpr_mission/lib/gpr_mission/gpr_mission_node",
+      "args": [],
+      "cwd": "/overlay_ws",
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "colcon: build overlay",
+      "environment": [
+        {
+          "name": "RMW_IMPLEMENTATION",
+          "value": "rmw_cyclonedds_cpp"
+        }
+      ]
+    }
+  ]
+}

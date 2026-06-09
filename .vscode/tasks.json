@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "colcon: build overlay",
+      "type": "shell",
+      "command": "source /entrypoint.sh && cd /overlay_ws && colcon build --symlink-install",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "GPR: launch coverage",
+      "type": "shell",
+      "command": "source /entrypoint.sh && cd /overlay_ws && source install/setup.bash && ros2 launch gpr_bringup gpr_coverage.launch.py",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

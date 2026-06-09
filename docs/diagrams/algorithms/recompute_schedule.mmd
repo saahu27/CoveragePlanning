@@ -1,0 +1,38 @@
+flowchart TD
+  START[recompute_schedule] --> OARP["refresh_oarp_ranks<br/>only if schedulable empty ∧ OARP on ∧ gen less than 2<br/>A* to first rank else reject batch"]
+  OARP --> SCHED["schedulable_segments()<br/>Pending unblocked only"]
+  SCHED --> CLEAR[clear schedule_ + scheduled_passes_]
+
+  CLEAR --> GROUP["GroupPasses — ALWAYS runs<br/>BoustrophedonSequencer<br/>by lane_index sort merge_gap 0.2 m<br/>even lane Forward odd Reverse<br/>→ CoveragePass jobs"]
+
+  GROUP --> MODE{"sequencer.use_boustrophedon?"}
+
+  subgraph mode_true ["use_boustrophedon = true — pass ORDERING"]
+    MODE -->|true| P1["plan(robot, grid, astar)<br/>greedy nearest-pass order<br/>cost = astar.transit_cost"]
+    P1 --> S1["schedule_ = ordered pass jobs"]
+    S1 --> ORPH{"lane-less segments<br/>not in any pass?"}
+    ORPH -->|yes| ATSP1["OR-Tools ATSP on orphans only<br/>append to schedule_"]
+    ORPH -->|no| POST
+    ATSP1 --> POST
+  end
+
+  subgraph mode_false ["use_boustrophedon = false — ATSP order"]
+    MODE -->|false| P2["plan(merge only — no robot pose)<br/>passes unordered by lane index"]
+    P2 --> BUILD["atsp_segments =<br/>pass proxy segments + lane-less orphans"]
+    BUILD --> ATSP2["OR-Tools ATSP on ALL jobs<br/>2 s limit → heuristic fallback"]
+    ATSP2 --> META[attach_pass_metadata]
+    META --> POST
+  end
+
+  POST["Post-process"] --> HOLD["If current_job held:<br/>strip overlapping queue entries"]
+  HOLD --> REACH{"require_reachable_transit?"}
+  REACH -->|yes| FILT["filter_schedule_by_reachability<br/>near entry: followable prefix<br/>far: A* transit exists"]
+  FILT --> EMPTY{"schedule_ empty ∧ schedulable remain?"}
+  EMPTY -->|yes| BLOCK["block_unreachable_schedulable<br/>mark segments blocked"]
+  EMPTY -->|no| DONE
+  BLOCK --> DONE[schedule_ ready — pop front job]
+  REACH -->|no| DONE
+
+  subgraph cost_note [ATSP / greedy ordering cost — NOT execution A*]
+    COST["transit_cost = Euclidean d<br/>× blocked_transit_penalty 4.0<br/>if straight segment collides<br/>Execution still uses A* per job"]
+  end

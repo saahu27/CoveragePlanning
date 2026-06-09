@@ -1,0 +1,17 @@
+# Colcon workspace artifacts (devcontainer mounts .colcon/*; host may also build at repo root)
+.colcon/
+build/
+install/
+log/
+
+results/*
+!results/.gitkeep
+docs/output/*
+!docs/output/.gitkeep
+!docs/output/*.pdf
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/extensions.json
+**/__pycache__/

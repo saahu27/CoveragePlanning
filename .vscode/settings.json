@@ -1,0 +1,11 @@
+{
+  "ros.distro": "jazzy",
+  "ros.workspacePaths": [
+    "/overlay_ws"
+  ],
+  "files.associations": {
+    "*.world": "xml",
+    "*.xacro": "xml",
+    "*.sdf": "xml"
+  }
+}

@@ -1,0 +1,177 @@
+gpr_mission:
+  ros__parameters:
+    use_sim_time: true
+
+    # --- Frames & mission node ---
+    frame_id: "map"                          # World frame for planning, perception, RViz
+    robot_base_frame: "base_link"            # Robot frame for TF lookups
+    status_topic: "/coverage_status"         # Mission state string publisher
+    coverage_report.topic: "/coverage_report"           # Live coverage metrics message
+    coverage_schedule.topic: "/coverage_schedule"       # Ordered job queue message
+    coverage_report.export_dir: "results"    # Directory for end-of-mission text report
+    coverage_report.export_path: ""          # Optional exact export file path override
+    mission.tick_rate_hz: 2.0                # Behavior-tree tick rate
+    mission.executor_threads: 4              # MultiThreadedExecutor worker count
+    mission.groot2_port: 1668                # Groot2 BT monitor port
+    mission.return_home: true                # Navigate to spawn after coverage
+    mission.return_home_tolerance: 0.35      # Pose tolerance for return-home success (m)
+    mission.shutdown_on_complete: true       # Exit mission node when BT completes
+    mission.max_recovery_skips: 12           # Max consecutive Nav2 failures before abort
+    tree_xml_file: ""                        # BT XML path; empty uses package default
+
+    # --- Scan region (mission boundary; not perception-derived) ---
+    scenario: rectangle                        # rectangle | polygon — selects bounds below
+    scan_area.x_min: -4.0                    # Rectangle boundary min x (m)
+    scan_area.x_max: 4.0                       # Rectangle boundary max x (m)
+    scan_area.y_min: -2.5                      # Rectangle boundary min y (m)
+    scan_area.y_max: 2.5                       # Rectangle boundary max y (m)
+    scan_area.polygon.x_min: -4.0              # Polygon preset grid extent min x (m)
+    scan_area.polygon.x_max: 4.0               # Polygon preset grid extent max x (m)
+    scan_area.polygon.y_min: -2.0              # Polygon preset grid extent min y (m)
+    scan_area.polygon.y_max: 2.5               # Polygon preset grid extent max y (m)
+    scan_area.polygon_vertices:                # CCW polygon vertices [x0,y0,x1,y1,...]
+      - -4.0
+      - -2.0
+      - 4.0
+      - -2.0
+      - 4.0
+      - 2.5
+      - 2.5
+      - -0.5
+      - 0.0
+      - 2.5
+      - -2.5
+      - -0.5
+      - -4.0
+      - 2.5
+
+    # --- Perception / local occupancy mapping ---
+    local_mapping.resolution: 0.05             # Occupancy grid cell size (m)
+    local_mapping.inflation_radius: 0.35       # Safety inflation on viz export grid (m)
+    local_mapping.publish_rate_hz: 5.0         # Map publish timer rate (Hz)
+    local_mapping.hit_marking_radius: 0.15     # Disk radius marked occupied per LiDAR hit (m)
+    local_mapping.prob_hit: 0.85               # Log-odds increment on occupied observation
+    local_mapping.prob_miss: 0.35              # Log-odds decrement on free ray traversal
+    local_mapping.log_odds_clamp: 5.0          # Symmetric clamp on accumulated log-odds
+    local_mapping.occupied_export_threshold: 50  # Cost exported as lethal to planning grid
+    local_mapping.scan_topic: "/scan"          # Input LaserScan topic
+    local_mapping.map_topic: "/local_occupancy_grid"              # Inflated map for RViz
+    local_mapping.nav_map_topic: "/local_occupancy_grid_planning" # Thresholded map for planning
+    local_mapping.scan_tf_timeout_sec: 0.2     # TF lookup timeout per scan (s)
+    local_mapping.tf_warn_throttle_ms: 3000    # Throttle for TF-missing warnings (ms)
+
+    # --- Boustrophedon initial planner ---
+    lane_spacing: 0.5                          # Parallel coverage lane spacing (m)
+    waypoint_spacing: 0.1                      # Centerline waypoint spacing along lanes (m)
+    coverage_inset: 0.60                       # Inward margin from scan boundary (m)
+    segment_length: 1.0                        # Catalog master segment length (m)
+    scan_direction: "x"                        # Lane orientation: x | y
+
+    # --- Path invalidator (segment vs grid collision) ---
+    path_invalidator.obstacle_cost_threshold: 50   # Cell cost treated as lethal
+    path_invalidator.segment_sample_spacing: 0.05    # Min collision sample step along edges (m)
+    path_invalidator.footprint_radius: 0.22        # Robot clearance disk radius (m)
+    path_invalidator.treat_unknown_as_free: true     # Allow traversal through unknown cells
+    path_invalidator.block_only_observed_occupied: true  # Ignore unobserved lethal export
+    path_invalidator.boundary_ignore_margin: 0.0     # Ignore obstacles near scan perimeter (m)
+    path_invalidator.map_inflation_radius: 0.0       # Extra invalidation inflation beyond footprint (m)
+    path_invalidator.collision_sample_resolution_factor: 0.5  # Edge step uses max(spacing, factor×resolution)
+    path_invalidator.legacy_segment_quantize_m: 0.05          # Quantization for legacy geometry segment ids (m)
+
+    # --- Segment catalog (split / schedule policy) ---
+    segment_catalog.schedule_blocked_probes: false   # Schedule blocked-but-unattempted segments
+    segment_catalog.min_split_length_m: 0.25         # Drop free fragments shorter than this (m)
+    segment_catalog.mark_completed_overlap_tol_m: 0.25       # Legacy overlap completion lateral tol (m)
+    segment_catalog.mark_completed_min_overlap_fraction: 0.55  # Legacy overlap completion fraction
+    segment_catalog.split_length_tolerance_m: 0.001  # Treat single fragment as full-length within ε (m)
+
+    # --- Executed trajectory trace ---
+    planning.executed_trace_step_m: 0.05       # Min spacing between recorded poses (m)
+    planning.flush_pose_min_step_m: 0.0001     # Min spacing when force-appending leg-end pose (m)
+    planning.update_grid_log_throttle_ms: 2000 # Throttle for grid-update info logs (ms)
+    planning.first_grid_blocked_warn_fraction: 0.5  # Warn if this fraction blocked on first sync
+
+    # --- OARP-lite rank replan ---
+    oarp_lite.enabled: true                    # Inject new ranks when baseline work exhausted
+    oarp_lite.min_rank_length_m: 0.35          # Ignore free rank fragments shorter than this (m)
+    oarp_lite.max_replan_generations: 2        # Max OARP rank injection batches per mission
+    oarp_lite.overlap_dist_m: 0.2              # Proximity to completed segment disqualifying rank (m)
+
+    # --- A* transit planner ---
+    astar.obstacle_cost_threshold: 50          # Lethal cost for A* expansion
+    astar.treat_unknown_as_free: true          # Allow A* through unknown cells
+    astar.footprint_radius: 0.22               # Clearance disk for A* collision checks (m)
+    astar.blocked_transit_penalty: 4.0         # Euclidean multiplier when straight line blocked
+    astar.fallback_grid_resolution_m: 0.05   # Assumed resolution when grid.resolution is zero
+    astar.collision_sample_resolution_factor: 0.5  # Path check step uses max(spacing, factor×resolution)
+
+    # --- Sequencer ---
+    sequencer.time_limit_sec: 2.0                # OR-Tools wall-clock search budget (s)
+    sequencer.use_boustrophedon: true            # true: lane-order; false: ATSP visit order
+    sequencer.merge_gap_m: 0.2                   # Merge adjacent lane pieces within this gap (m)
+    sequencer.merge_endpoint_epsilon_m: 0.001      # Discard merged passes shorter than this (m)
+    sequencer.require_reachable_transit: true    # Drop jobs with unreachable transit
+    sequencer.job_completion_overlap_fraction: 0.55  # Fallback min_complete if coverage.* unset
+    sequencer.atsp.direction_disjunction_penalty: 100000000.0  # Cost to skip one drive direction
+    sequencer.atsp.unreachable_transit_cost: 1000000000.0      # ATSP matrix entry when transit infeasible
+    sequencer.atsp.cost_scale: 1000.0            # Float-to-int multiplier for OR-Tools arc costs
+    sequencer.atsp.first_solution_strategy: "PATH_CHEAPEST_ARC"  # OR-Tools first-solution heuristic
+
+    # --- Arc-length swath coverage (on-trajectory completion) ---
+    coverage.lateral_max_m: 0.22               # Max lateral offset from centerline (m)
+    coverage.heading_max_deg: 35.0               # Max heading error from centerline (deg)
+    coverage.sample_half_width_m: 0.025          # Half-width of arc-length sample window (m)
+    coverage.min_complete_fraction: 0.85         # Covered fraction for Completed outcome
+    coverage.min_partial_fraction: 0.35          # Covered fraction for PartiallyCompleted outcome
+    coverage.partial_enabled: true               # Enable partial completion classification
+
+    # --- Coverage metrics / reporting ---
+    metrics.mission_id_start: 1                  # First mission id for baseline freeze / export
+    metrics.implicit_blocked_length_epsilon_m: 0.000001  # Child-length deficit counted as blocked (m)
+
+    # --- RViz / planning IO visualization ---
+    visualization.show_completed_segments: true  # Draw completed segments in markers
+    visualization.executed_path_topic: "/coverage_executed_path"
+    visualization.updated_coverage_path_markers_topic: "/updated_coverage_path_markers"
+    visualization.initial_coverage_path_topic: "/initial_coverage_path"
+    visualization.updated_coverage_path_topic: "/updated_coverage_path"
+    visualization.updated_coverage_strips_topic: "/updated_coverage_path_strips"
+    visualization.transit_path_topic: "/coverage_transit_path"
+    visualization.swath_heatmap_topic: "/coverage_swath_heatmap"
+    visualization.uncovered_markers_topic: "/coverage_report/uncovered_markers"
+    visualization.complete_fraction: 0.85        # Baseline arc green threshold in RViz
+    visualization.partial_fraction: 0.35         # Baseline arc gold threshold in RViz
+    visualization.marker_line_width: 0.05        # Segment marker line thickness (m)
+    visualization.segment_densify_step_min_m: 0.05       # Min polyline densify step without grid (m)
+    visualization.segment_densify_resolution_factor: 0.5 # Densify step = max(min, factor×resolution)
+    visualization.heatmap_sample_step_m: 0.1           # Heatmap sample step without grid (m)
+    visualization.heatmap_sample_step_min_m: 0.08        # Heatmap sample step lower bound with grid (m)
+    visualization.baseline_part_overlap_tol_m: 0.25      # Baseline arc overlap lateral tol (m)
+    visualization.baseline_part_overlap_fraction: 0.5    # Mutual overlap fraction for arc match
+    visualization.coverage_report_log_throttle_ms: 5000  # Throttle coverage report info logs (ms)
+    visualization.heatmap_cube_width_factor: 0.8         # Heatmap cube width = step × factor
+
+    # --- Control (Nav2 FollowPath; tuning in nav2_gpr_params.yaml) ---
+    control.follow_path_action: "follow_path"
+    control.controller_id: "FollowPath"
+    control.goal_checker_id: "general_goal_checker"
+    control.path_prune_distance: 0.15            # Drop passed waypoints within this distance (m)
+    control.min_follow_distance: 0.25            # Skip Nav2 if path shorter than this (m)
+    control.allow_instant_success: false         # Succeed without sending very short paths
+    control.transit_skip_distance: 0.35          # Drive coverage directly if entry closer (m)
+    control.action_server_wait_timeout_sec: 2.0  # Wait for FollowPath action server (s)
+
+    # --- Launch-only (read by gpr_coverage.launch.py, not mission algorithms) ---
+    launch.sim: true
+    launch.nav2: true
+    launch.rviz: true
+    launch.static_tf: true
+    launch.mission_startup_delay_sec: 8.0
+    launch.sim_startup_delay_sec: 3.0
+    launch.shutdown_on_mission_complete: true
+    sim.spawn_x: -3.25
+    sim.spawn_y: -1.75
+    sim.spawn_yaw: 0.0
+    sim.spawn_z: 0.01
+    sim.polygon.spawn_x: -3.0
+    sim.polygon.spawn_y: -1.5

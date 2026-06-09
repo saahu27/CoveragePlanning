@@ -1,0 +1,24 @@
+# Dev Container overrides for docker-compose.yaml
+#
+# Compose replaces (does not merge) volume lists, so all required mounts are
+# listed here for the dev service.
+
+services:
+  dev:
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/home/devuser/.Xauthority:rw
+      - .:/workspaces/turtlebot3_behavior_demos:cached
+      - ./gpr_common:/overlay_ws/src/gpr_common:rw
+      - ./gpr_msgs:/overlay_ws/src/gpr_msgs:rw
+      - ./gpr_metrics:/overlay_ws/src/gpr_metrics:rw
+      - ./gpr_perception:/overlay_ws/src/gpr_perception:rw
+      - ./gpr_planning:/overlay_ws/src/gpr_planning:rw
+      - ./gpr_control:/overlay_ws/src/gpr_control:rw
+      - ./gpr_mission:/overlay_ws/src/gpr_mission:rw
+      - ./gpr_bringup:/overlay_ws/src/gpr_bringup:rw
+      - ./docs:/overlay_ws/docs:rw
+      - ./.colcon/build:/overlay_ws/build:rw
+      - ./.colcon/install:/overlay_ws/install:rw
+      - ./.colcon/log:/overlay_ws/log:rw
+      - ./results:/overlay_ws/results:rw

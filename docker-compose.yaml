@@ -1,0 +1,64 @@
+# Docker Compose for GPR coverage development
+#
+# Build:  docker compose build dev
+# Shell:  docker compose run --rm dev bash
+
+services:
+  base:
+    image: gpr_coverage:base
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        ROS_DISTRO: ${TB_ROS_DISTRO:-jazzy}
+      target: base
+    stdin_open: true
+    tty: true
+    network_mode: host
+    ipc: host
+    privileged: true
+    gpus: all
+    environment:
+      - TURTLEBOT_MODEL=${TURTLEBOT_MODEL:-3}
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority
+
+  overlay:
+    extends: base
+    image: gpr_coverage:overlay
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: overlay
+
+  dev:
+    extends: overlay
+    image: gpr_coverage:dev
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+      args:
+        - UID=${UID:-1000}
+        - GID=${UID:-1000}
+        - USERNAME=${USERNAME:-devuser}
+    volumes:
+      - ./gpr_common:/overlay_ws/src/gpr_common:rw
+      - ./gpr_msgs:/overlay_ws/src/gpr_msgs:rw
+      - ./gpr_metrics:/overlay_ws/src/gpr_metrics:rw
+      - ./gpr_perception:/overlay_ws/src/gpr_perception:rw
+      - ./gpr_planning:/overlay_ws/src/gpr_planning:rw
+      - ./gpr_control:/overlay_ws/src/gpr_control:rw
+      - ./gpr_mission:/overlay_ws/src/gpr_mission:rw
+      - ./gpr_bringup:/overlay_ws/src/gpr_bringup:rw
+      - ./docs:/overlay_ws/docs:rw
+      - ./.colcon/build/:/overlay_ws/build/:rw
+      - ./.colcon/install/:/overlay_ws/install/:rw
+      - ./.colcon/log/:/overlay_ws/log/:rw
+      - ./results:/overlay_ws/results:rw
+    user: ${USERNAME:-devuser}
+    command: sleep infinity

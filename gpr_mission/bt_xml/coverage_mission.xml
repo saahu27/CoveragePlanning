@@ -1,0 +1,50 @@
+<root BTCPP_format="4">
+  <BehaviorTree ID="CoverageMission">
+    <Sequence name="mission_root">
+      <WaitForMap name="wait_for_map"/>
+      <GenerateInitialCoverage name="gen_coverage"/>
+      <!-- KeepRunningUntilFailure returns FAILURE when HasPendingJobs fails;
+           Fallback catches that and returns SUCCESS so MissionComplete runs. -->
+      <Fallback name="coverage_loop">
+        <KeepRunningUntilFailure name="coverage_repeat">
+          <Sequence name="normal_cycle">
+            <HasPendingJobs name="has_work"/>
+            <UpdateSegmentCatalog name="update_catalog"/>
+            <Fallback name="schedule_if_needed">
+              <Sequence name="replan_on_change">
+                <ScheduleNeedsRebuild name="schedule_needs_rebuild"/>
+                <RecomputeSchedule name="recompute"/>
+              </Sequence>
+              <AlwaysSuccess name="schedule_ok"/>
+            </Fallback>
+            <Fallback name="execute_with_recovery">
+              <ExecuteNextJob name="execute"/>
+              <Sequence name="recovery">
+                <CancelControl name="cancel"/>
+                <SkipCurrentJob name="skip"/>
+                <RecomputeSchedule name="recompute_after_skip"/>
+              </Sequence>
+            </Fallback>
+          </Sequence>
+        </KeepRunningUntilFailure>
+        <AlwaysSuccess name="coverage_done"/>
+      </Fallback>
+      <MissionComplete name="done"/>
+      <ReturnToStart name="return_home"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <TreeNodesModel>
+    <Action ID="WaitForMap"/>
+    <Action ID="GenerateInitialCoverage"/>
+    <Action ID="UpdateSegmentCatalog"/>
+    <Condition ID="ScheduleNeedsRebuild"/>
+    <Action ID="RecomputeSchedule"/>
+    <Condition ID="HasPendingJobs"/>
+    <Action ID="ExecuteNextJob"/>
+    <Action ID="SkipCurrentJob"/>
+    <Action ID="CancelControl"/>
+    <Action ID="MissionComplete"/>
+    <Action ID="ReturnToStart"/>
+  </TreeNodesModel>
+</root>

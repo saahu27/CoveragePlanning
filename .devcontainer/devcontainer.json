@@ -1,0 +1,39 @@
+{
+  "name": "GPR Coverage",
+  "dockerComposeFile": [
+    "../docker-compose.yaml",
+    "docker-compose.yml"
+  ],
+  "service": "dev",
+  "runServices": [
+    "dev"
+  ],
+  "workspaceFolder": "/workspaces/turtlebot3_behavior_demos",
+  "remoteUser": "devuser",
+  "updateRemoteUserUID": true,
+  "initializeCommand": "bash .devcontainer/initialize-host.sh",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "containerEnv": {
+    "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-iot.vscode-ros",
+        "ms-vscode.cpptools",
+        "ms-python.python",
+        "twxs.cmake",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "ros.distro": "jazzy",
+        "ros.workspacePaths": [
+          "/overlay_ws"
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "C_Cpp.default.compileCommands": "/overlay_ws/build/compile_commands.json"
+      }
+    }
+  }
+}

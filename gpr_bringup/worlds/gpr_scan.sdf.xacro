@@ -1,0 +1,141 @@
+<?xml version="1.0"?>
+<!-- GPR scan assignment world: flat ground, 8 m x 5 m scan region, static obstacles.
+     Perimeter walls align with scan_area in gpr_coverage.yaml (collision + lidar).
+     Interior box obstacles are NOT exposed to the planner until observed via /scan. -->
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="headless" default="false"/>
+
+  <!-- Scan region bounds (must match gpr_coverage.yaml scan_area.*) -->
+  <xacro:property name="x_min" value="-4.0"/>
+  <xacro:property name="x_max" value="4.0"/>
+  <xacro:property name="y_min" value="-2.5"/>
+  <xacro:property name="y_max" value="2.5"/>
+  <xacro:property name="x_span" value="8.0"/>
+  <xacro:property name="y_span" value="5.0"/>
+  <!-- Walls sit just outside scan_area so the free interior matches planner bounds. -->
+  <xacro:property name="wall_thickness" value="0.10"/>
+  <xacro:property name="wall_height" value="0.60"/>
+  <xacro:property name="wall_corner_overlap" value="0.10"/>
+  <xacro:property name="north_y" value="${y_max + wall_thickness / 2.0}"/>
+  <xacro:property name="south_y" value="${y_min - wall_thickness / 2.0}"/>
+  <xacro:property name="east_x" value="${x_max + wall_thickness / 2.0}"/>
+  <xacro:property name="west_x" value="${x_min - wall_thickness / 2.0}"/>
+  <xacro:property name="ns_wall_length" value="${x_span + wall_corner_overlap}"/>
+  <xacro:property name="ew_wall_length" value="${y_span + wall_corner_overlap}"/>
+
+  <xacro:macro name="static_box_obstacle" params="name x y sx sy sz r:=0.45 g:=0.45 b:=0.45">
+    <model name="${name}">
+      <static>true</static>
+      <pose>${x} ${y} ${sz / 2.0} 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>${sx} ${sy} ${sz}</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>${sx} ${sy} ${sz}</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>${r} ${g} ${b} 1</ambient>
+            <diffuse>${r} ${g} ${b} 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+  </xacro:macro>
+
+  <!-- Physical scan boundary wall (collision + lidar + green visual).
+       Centered outside scan_area edges; interior remains [x_min,x_max] x [y_min,y_max]. -->
+  <xacro:macro name="boundary_wall" params="name x y sx sy">
+    <model name="${name}">
+      <static>true</static>
+      <pose>${x} ${y} ${wall_height / 2.0} 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>${sx} ${sy} ${wall_height}</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>${sx} ${sy} ${wall_height}</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.55 0.15 1</ambient>
+            <diffuse>0.1 0.75 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+  </xacro:macro>
+
+  <world name="gpr_scan">
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <xacro:unless value="$(arg headless)">
+      <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    </xacro:unless>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <light name="sun" type="directional">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 -0.3 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.5 0.2 -1.0</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.85 0.85 0.85 1</ambient>
+            <diffuse>0.9 0.9 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Scan region boundary walls (8 m x 5 m interior, matches scan_area in yaml) -->
+    <xacro:boundary_wall name="scan_wall_n" x="0" y="${north_y}" sx="${ns_wall_length}" sy="${wall_thickness}"/>
+    <xacro:boundary_wall name="scan_wall_s" x="0" y="${south_y}" sx="${ns_wall_length}" sy="${wall_thickness}"/>
+    <xacro:boundary_wall name="scan_wall_e" x="${east_x}" y="0" sx="${wall_thickness}" sy="${ew_wall_length}"/>
+    <xacro:boundary_wall name="scan_wall_w" x="${west_x}" y="0" sx="${wall_thickness}" sy="${ew_wall_length}"/>
+
+    <!-- Static obstacles inside scan region (unknown to planner until observed) -->
+    <xacro:static_box_obstacle name="obstacle_1" x="1.0" y="0.5" sx="0.8" sy="0.6" sz="0.5"/>
+    <xacro:static_box_obstacle name="obstacle_2" x="-2.0" y="1.2" sx="0.6" sy="0.5" sz="0.5"/>
+    <xacro:static_box_obstacle name="obstacle_3" x="2.5" y="-1.2" sx="0.7" sy="0.4" sz="0.5"/>
+    <xacro:static_box_obstacle name="obstacle_4" x="-0.5" y="-1.8" sx="0.5" sy="0.8" sz="0.5"/>
+    <xacro:static_box_obstacle name="obstacle_5" x="3.0" y="1.8" sx="0.4" sy="0.4" sz="0.5" r="0.55" g="0.35" b="0.2"/>
+
+  </world>
+</sdf>

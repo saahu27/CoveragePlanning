@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "ms-iot.vscode-ros",
+    "ms-vscode.cpptools",
+    "ms-python.python",
+    "twxs.cmake",
+    "redhat.vscode-yaml"
+  ]
+}

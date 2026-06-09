@@ -1,0 +1,31 @@
+flowchart TB
+  subgraph sense [gpr_perception — OccupancyGridMapper]
+    scan["/scan LiDAR"]
+    tf[TF: base_link → map]
+    beam[Per valid beam]
+    ray[Bresenham ray trace]
+    miss[Cells along ray: +L_miss<br/>prob_miss 0.35]
+    hit[Endpoint + hit disk 0.15 m: +L_hit<br/>prob_hit 0.85]
+    lod[Log-odds field clamped ±5]
+  end
+
+  subgraph export [Dual grid export]
+    thresh[Threshold observed cells<br/>P ≥ 50% → lethal cost 50]
+    plan["Planning grid — no inflation<br/>/local_occupancy_grid_planning"]
+    infl[Inflate lethal disks 0.35 m<br/>for RViz only]
+    viz["/local_occupancy_grid"]
+  end
+
+  subgraph consumers [Downstream use]
+    inv[PathInvalidator + SegmentCatalog<br/>split / blocked tests]
+    nav[Nav2 costmap / A* transit]
+    rviz[RViz occupancy display]
+  end
+
+  scan --> tf --> beam --> ray
+  ray --> miss --> lod
+  ray --> hit --> lod
+  lod --> thresh
+  thresh --> plan --> inv
+  thresh --> infl --> viz --> rviz
+  plan --> nav

@@ -1,0 +1,219 @@
+sequenceDiagram
+  autonumber
+  participant Launch as gpr_bringup launch
+  participant GMN as GprMissionNode
+  participant BT as BehaviorTree
+  participant MC as MissionContext
+  participant PB as PerceptionBridge
+  participant PP as PerceptionPipeline
+  participant OGM as OccupancyGridMapper
+  participant PE as PlanningEngine
+  participant SC as SegmentCatalog
+  participant PI as PathInvalidator
+  participant PO as planning_ops
+  participant RIO as RosIoFacade
+  participant PW as PlanningWorker
+  participant CB as ControlBridge
+  participant NFT as Nav2FollowPathTracker
+  participant Nav2 as Nav2 controller_server
+  participant GZ as Gazebo
+
+  Note over Launch,GZ: Phase 0 - Stack bringup
+  Launch->>GZ: gz_sim.launch.py + gpr_scan world
+  Launch->>Nav2: nav2_gpr.launch.py controller_server
+  Launch->>GMN: gpr_mission_node + gpr_coverage.yaml
+  GMN->>MC: CoverageStack::initialize
+  MC->>PB: PerceptionBridge OccupancyGridMapper
+  MC->>PE: PlanningEngine BoustrophedonPlanner SegmentCatalog
+  MC->>RIO: RosIoFacade publishers
+  MC->>PW: PlanningWorker start thread
+  MC->>CB: ControlBridge Nav2FollowPathTracker
+  GMN->>BT: createTreeFromFile coverage_mission.xml
+
+  Note over GMN,BT: Phase 1 - WaitForMap
+  loop tick_tree 2 Hz
+    GMN->>BT: tickOnce
+    BT->>MC: WaitForMap::tick
+    MC->>PB: has_grid
+    alt grid ready
+      PB-->>BT: SUCCESS state Planning
+    else no grid yet
+      PB-->>BT: RUNNING state WaitingForMap
+    end
+  end
+
+  Note over BT,RIO: Phase 2 - GenerateInitialCoverage
+  BT->>PO: generate_initial_coverage PlanningServices
+  PO->>PE: generate_initial_coverage
+  PE->>PE: BoustrophedonPlanner::generate initial_path_
+  PE->>PE: BoustrophedonPlanner::generate_segments master
+  PE->>SC: SegmentCatalog::initialize master segments
+  PE->>PE: CoverageReporter::record_baseline
+  PO->>RIO: publish_initial_coverage
+  RIO->>RIO: pub /initial_coverage_path refresh_all markers report
+  BT->>MC: robot_pose or default_home_pose
+  MC->>PE: set_route_end_pose home_pose
+  BT-->>GMN: SUCCESS
+
+  Note over BT,Nav2: Phase 3 - Coverage loop normal_cycle
+  loop KeepRunningUntilFailure while HasPendingJobs
+    BT->>PE: HasPendingJobs has_work_remaining
+  alt recovery_skip_count ge 12
+    BT-->>GMN: FAILURE ends loop
+  end
+
+    BT->>PB: UpdateSegmentCatalog has_grid
+    BT->>PE: update_from_grid latest_grid_ptr
+    PE->>SC: SegmentCatalog::update_blocked grid
+    SC->>PI: PathInvalidator::free_subpolylines per segment
+    PI-->>SC: split segments blocked flags
+    SC-->>PE: catalog revision++ catalog_changed_
+    PE->>RIO: notify_viz_refresh refresh_all
+
+    alt ScheduleNeedsRebuild schedule_needs_rebuild
+      BT->>RCS: RecomputeSchedule onStart
+      RCS->>PE: has_pending_jobs reachability schedule_needs_rebuild
+      RCS->>PW: submit_schedule_job RecomputeSchedule snapshot
+      PW->>PW: worker_loop run_job
+      PW->>PE: apply_snapshot_grid
+      PW->>PO: recompute_and_publish robot_pose
+      PO->>PE: recompute_schedule
+      PE->>SC: refresh_oarp_ranks schedulable_segments
+      alt sequencer.use_boustrophedon true
+        PE->>PE: BoustrophedonSequencer::plan lane passes
+        PE->>PE: ISequenceSolver::solve unassigned ATSP
+      else ATSP primary
+        PE->>PE: BoustrophedonSequencer partial + solver solve
+      end
+      PE->>PE: filter_schedule_by_reachability AStarGridPlanner
+      PO->>RIO: publish_schedule /coverage_schedule
+      RCS->>PW: poll_planning_job
+      PW-->>RCS: Succeeded
+      RCS-->>BT: SUCCESS
+    else schedule current
+      BT-->>BT: AlwaysSuccess schedule_ok
+    end
+
+    Note over BT,Nav2: Phase 4 - ExecuteNextJob async follow loop
+    BT->>ENJ: ExecuteNextJob onStart
+    ENJ->>PE: pop_next_job robot_pose transit_skip_distance
+    PE->>PE: dequeue schedule_ skip unreachable via AStar
+    ENJ->>PE: transit_to_current_job AStarGridPlanner::plan_path
+    alt needs_transit entry_dist ge transit_skip_distance
+      ENJ->>PE: is_transit_path_followable
+      ENJ->>PO: publish_transit_path
+      PO->>RIO: pub /coverage_transit_path
+      ENJ->>PE: phase Transit
+    else at lane entry
+      ENJ->>PO: publish_transit_path empty
+      ENJ->>PE: current_job_followable_polyline_for_robot path_prune_distance
+      ENJ->>PE: phase Coverage
+    end
+    ENJ->>PE: clear_executed_trace append_executed_pose
+    ENJ->>PE: set_last_executed_path mark_current_job_attempted
+    ENJ->>CB: follow Polyline callback
+    CB->>NFT: follow
+    NFT->>NFT: prepare_path prune prepend robot TF map to base_link
+    NFT->>Nav2: async_send_goal FollowPath
+    Nav2->>GZ: cmd_vel_nav
+    ENJ-->>BT: RUNNING
+
+    loop ExecuteNextJob onRunning until SUCCESS or FAILURE
+      GMN->>BT: tickOnce
+      BT->>ENJ: onRunning
+
+      alt interrupt_replan_request_id active
+        ENJ->>PW: poll_planning_job reset track
+        PW-->>ENJ: terminal
+        ENJ-->>BT: SUCCESS ends job tick replan done
+      end
+
+      ENJ->>PB: has_grid latest_grid_ptr
+      ENJ->>PE: update_from_grid
+      PE->>SC: update_blocked PathInvalidator splits
+      SC-->>PE: catalog_changed_
+
+      alt begin_interrupt_replan catalog_changed and active_job_needs_replan
+        Note over ENJ,PW: Mid-job adaptive replan not in transit phase
+        ENJ->>CB: cancel
+        CB->>NFT: async_cancel_goal
+        alt job no longer actionable
+          ENJ->>PE: release_current_job
+        end
+        ENJ->>PW: submit_schedule_job Urgent force=true
+        PW->>PO: recompute_and_publish
+        ENJ-->>BT: RUNNING wait poll
+      end
+
+      alt track not done
+        ENJ->>PE: append_executed_pose robot_pose
+        opt phase Transit
+          ENJ->>PO: refresh_transit_display
+          PO->>RIO: pub /coverage_transit_path
+        end
+        ENJ-->>BT: RUNNING
+      end
+
+      alt track_done and not track_success
+        ENJ-->>BT: FAILURE triggers recovery
+      end
+
+      alt track_done Transit phase success
+        ENJ->>PE: phase Coverage
+        ENJ->>PO: publish_transit_path empty
+        ENJ->>PE: current_job_followable_polyline_for_robot
+        ENJ->>CB: follow coverage path
+        CB->>NFT: follow
+        NFT->>Nav2: FollowPath coverage leg
+        ENJ-->>BT: RUNNING
+      end
+
+      alt track_done Coverage phase success
+        ENJ->>PE: job_completion_satisfied
+        Note over PE,SC: polyline_covered_fraction executed_trace vs centerline overlap ge 0.55
+        alt overlap threshold met
+          ENJ->>PE: mark_current_job_complete executed_trace_
+          PE->>SC: mark_completed_for_job ids driven_path
+          ENJ-->>BT: SUCCESS
+        else overlap not met
+          ENJ-->>BT: FAILURE triggers recovery
+        end
+      end
+    end
+
+    opt ExecuteNextJob FAILURE recovery Fallback
+      BT->>CC: CancelControl::tick
+      CC->>CB: cancel
+      CB->>NFT: async_cancel_goal
+      BT->>SCJ: SkipCurrentJob::tick
+      SCJ->>PE: mark_current_job_blocked
+      PE->>SC: mark_attempted_for_job mark_blocked_for_job
+      SCJ->>MC: force_replan true recovery_skip_count++
+      BT->>RCS: RecomputeSchedule force replan
+      RCS->>PW: submit_schedule_job Urgent
+      PW->>PO: recompute_and_publish ATSP Boustrophedon routing
+      RCS-->>BT: SUCCESS schedule rebuilt
+    end
+  end
+
+  Note over BT,RIO: Phase 5 - MissionComplete
+  BT->>PO: finalize_coverage_report
+  PO->>RIO: publish_coverage_report /coverage_report
+  PO->>PE: CoverageReporter compute_metrics compute_uncovered export_text_report
+  BT->>MC: state Complete
+
+  Note over BT,Nav2: Phase 6 - ReturnToStart A star transit home
+  BT->>RTS: ReturnToStart onStart
+  RTS->>PE: plan_transit_path robot_pose home_pose
+  PE->>PE: AStarGridPlanner::plan_path
+  RTS->>PO: publish_transit_path
+  RTS->>CB: follow home path
+  CB->>NFT: follow
+  NFT->>Nav2: FollowPath return leg
+  loop until track_done
+    GMN->>BT: tickOnce
+    RTS->>RTS: onRunning RUNNING
+  end
+  RTS->>PO: publish_transit_path empty
+  RTS->>MC: shutdown_requested if shutdown_on_complete
+  GMN->>GMN: rclcpp shutdown mission complete

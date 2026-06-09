@@ -1,0 +1,158 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Reference Frame: map
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Show Axes: false
+      Show Names: true
+    - Class: rviz_default_plugins/RobotModel
+      Enabled: true
+      Name: RobotModel
+    - Class: rviz_default_plugins/LaserScan
+      Enabled: true
+      Name: LaserScan
+      Size (m): 0.05
+      Style: Flat Squares
+      Topic:
+        Value: /scan
+    - Class: rviz_default_plugins/Odometry
+      Enabled: false
+      Name: Odometry
+      Topic:
+        Value: /odom
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 0; 220; 220
+      Enabled: true
+      Line Style: Billboards
+      Line Width: 0.04
+      Name: InitialCoveragePath
+      Offset:
+        Z: 0.05
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initial_coverage_path
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 255; 128; 0
+      Enabled: false
+      Line Style: Billboards
+      Line Width: 0.04
+      Name: UpdatedCoveragePath (nav_msgs, diagonal artifacts)
+      Offset:
+        Z: 0.06
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /updated_coverage_path
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: UpdatedCoverageStrips (optional orange remainder)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /updated_coverage_path_strips
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 0; 100; 255
+      Enabled: true
+      Line Style: Billboards
+      Line Width: 0.04
+      Name: CoverageTransitPath
+      Offset:
+        Z: 0.07
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /coverage_transit_path
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 255; 0; 255
+      Enabled: true
+      Line Style: Billboards
+      Line Width: 0.05
+      Name: ExecutedTrajectory
+      Offset:
+        Z: 0.09
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /coverage_executed_path
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: CoverageSegmentMarkers (red orange green)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /updated_coverage_path_markers
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: SwathCoverageHeatmap (green covered orange remainder)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /coverage_swath_heatmap
+    - Class: rviz_default_plugins/Map
+      Alpha: 0.55
+      Color Scheme: costmap
+      Draw Behind: true
+      Enabled: false
+      Name: LocalOccupancyGridPlanning (mission invalidation + Nav2)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_occupancy_grid_planning
+    - Class: rviz_default_plugins/Map
+      Alpha: 0.7
+      Color Scheme: map
+      Draw Behind: true
+      Enabled: false
+      Name: LocalOccupancyGrid (inflated RViz overlay)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_occupancy_grid
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: TopDown
+      Scale: 18
+      Target Frame: map
+      X: 0
+      Y: 0
+Window Name: gpr_scan

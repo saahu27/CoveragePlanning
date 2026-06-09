@@ -1,0 +1,36 @@
+flowchart TD
+  START[ExecuteNextJob] --> POP["pop_next_job()<br/>skip unreachable at queue front"]
+  POP --> EMPTY{"job available?"}
+  EMPTY -->|no| OK_EMPTY[SUCCESS — no work this tick]
+  EMPTY -->|yes| ATT[mark_current_job_attempted]
+
+  ATT --> DIST{"dist(robot, entry) ≥ transit_skip 0.35 m?"}
+
+  DIST -->|yes| TPH[Phase: Transit]
+  TPH --> AST["A* plan_path robot → entry<br/>actual obstacle-aware path"]
+  AST --> TFAIL{"path exists ∧ followable?"}
+  TFAIL -->|no| FAIL
+  TFAIL -->|yes| TNAV[Nav2 FollowPath Transit]
+  TNAV --> TRUN{track running}
+  TRUN -->|each tick| TUPD["update_from_grid<br/>interrupt replan only if job died<br/>transit leg not replanned mid-flight"]
+  TRUN -->|track fail| FAIL
+  TRUN -->|track ok| CPH[Phase: Coverage]
+
+  DIST -->|no| CPH
+  CPH --> COV["longest free prefix of<br/>trimmed job polyline<br/>free_subpolylines on grid"]
+  COV --> CFAIL{"prefix followable?"}
+  CFAIL -->|no| FAIL
+  CFAIL -->|yes| CNAV[Nav2 FollowPath Coverage]
+  CNAV --> CRUN{track running}
+  CRUN -->|each tick| CUPD["update_from_grid<br/>if map invalidates job:<br/>cancel + urgent RecomputeSchedule"]
+  CRUN -->|track fail| FAIL
+  CRUN -->|track ok| REC["record_current_job_coverage<br/>swath arc-length on coverage trace only"]
+  REC --> SAT{"job_completion_satisfied?<br/>overlap ≥ 0.55 job threshold"}
+  SAT -->|no| FAIL
+  SAT -->|yes| DONE["mark_current_job_complete<br/>recovery_skips = 0"]
+
+  FAIL[FAILURE → recovery branch] --> RECOV["CancelControl<br/>SkipCurrentJob blocked<br/>force_replan recovery_skips++"]
+
+  subgraph pass_note [Pass jobs]
+    PASS["If CoveragePass: merged centerline<br/>swath updates all segments on lane_index<br/>segment complete threshold 0.85"]
+  end
